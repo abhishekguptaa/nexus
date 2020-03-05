@@ -6,11 +6,11 @@
     nexus_download_url: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
     nexus_download_dest: /tmp/nexus-{{nexus_version}}-bundle.tar.gz
     nexus_extracted_dir: /tmp/nexus_extracted_dir
-    nexus_dir: /usr/local/nexus
+    nexus_dir: /usr/local/nexus/nexus-3.21.1-01
     nexus_admin_password: thegreat
-    nexus_data_dir: /usr/local/nexus
+    nexus_data_dir: /usr/local/nexus/nexus-3.21.1-01
     nexus_api_scheme: http
-    nexus_api_hostname: 3.12.241.72
+    nexus_api_hostname: 18.224.138.105
     nexus_api_port: 8081
     nexus_api_context_path: '/'
     nexus_default_admin_password: 6e28b524-bde7-4e31-8953-6289ebe48e5f
@@ -32,18 +32,31 @@
   - name: create "nexus" group
     group: name=nexus 
     
+
   - name: create "nexus" user
     user: name=nexus group=nexus 
     
   - name: Unarchive a file that needs to be downloaded (added in 2.0)
     unarchive:
-      src: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
-      dest: /usr/local
-      remote_src: yes
+     src: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
+     dest: /usr/local
+     remote_src: yes
     
   - name: make {{nexus_dir}} directory property of "nexus" user/group
     file: path={{nexus_dir}} group=nexus owner=nexus recurse=true
     
+  - name: Copying Directory of Nexus-3.21.1-01 to nexus
+    copy:
+      src: /usr/local/nexus-3.21.1-01
+      dest: /usr/local/nexus 
+      mode: '1777'
+      remote_src: true
+ 
+  - name: Removing Nexus-3.21.1-01
+    file:
+      path: /usr/local/nexus-3.21.1-01
+      state: absent
+      remote_src: true
 
   - name: make nexus runned by "nexus" user
     lineinfile: dest={{nexus_dir}}/bin/nexus.rc regexp="#run_as_user=" line="run_as_user=nexus" backrefs=true
@@ -71,5 +84,3 @@
     become: yes
     shell:
       cmd: service nexus start
-      
-#rename nexus 3.2.1 dir to nexus
