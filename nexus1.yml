@@ -36,7 +36,7 @@
     user: name=nexus group=nexus 
     
   - name: Unarchive a file that needs to be downloaded (added in 2.0)
-     unarchive:
+    unarchive:
       src: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
       dest: /usr/local
       remote_src: yes
