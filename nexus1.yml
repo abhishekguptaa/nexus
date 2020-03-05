@@ -71,3 +71,5 @@
     become: yes
     shell:
       cmd: service nexus start
+      
+#rename nexus 3.2.1 dir to nexus
