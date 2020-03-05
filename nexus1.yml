@@ -33,7 +33,7 @@
     group: name=nexus 
     
   - name: create "nexus" user
-     user: name=nexus group=nexus 
+    user: name=nexus group=nexus 
     
   - name: Unarchive a file that needs to be downloaded (added in 2.0)
      unarchive:
