@@ -33,54 +33,196 @@
     group: name=nexus 
     
 
-  - name: create "nexus" user
-    user: name=nexus group=nexus 
+#   - name: create "nexus" user
+#     user: name=nexus group=nexus 
     
-  - name: Unarchive a file that needs to be downloaded (added in 2.0)
-    unarchive:
-     src: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
-     dest: /usr/local
-     remote_src: yes
+#   - name: Unarchive a file that needs to be downloaded (added in 2.0)
+#     unarchive:
+#      src: http://download.sonatype.com/nexus/3/nexus-3.21.1-01-unix.tar.gz
+#      dest: /usr/local
+#      remote_src: yes
     
-  - name: make {{nexus_dir}} directory property of "nexus" user/group
-    file: path={{nexus_dir}} group=nexus owner=nexus recurse=true
+#   - name: make {{nexus_dir}} directory property of "nexus" user/group
+#     file: path={{nexus_dir}} group=nexus owner=nexus recurse=true
     
-  - name: Copying Directory of Nexus-3.21.1-01 to nexus
-    copy:
-      src: /usr/local/nexus-3.21.1-01
-      dest: /usr/local/nexus 
-      mode: '1777'
-      remote_src: true
+#   - name: Copying Directory of Nexus-3.21.1-01 to nexus
+#     copy:
+#       src: /usr/local/nexus-3.21.1-01
+#       dest: /usr/local/nexus 
+#       mode: '1777'
+#       remote_src: true
  
-  - name: Removing Nexus-3.21.1-01
-    file:
-      path: /usr/local/nexus-3.21.1-01
-      state: absent
-      remote_src: true
+#   - name: Removing Nexus-3.21.1-01
+#     file:
+#       path: /usr/local/nexus-3.21.1-01
+#       state: absent
+#       remote_src: true
 
-  - name: make nexus runned by "nexus" user
-    lineinfile: dest={{nexus_dir}}/bin/nexus.rc regexp="#run_as_user=" line="run_as_user=nexus" backrefs=true
+#   - name: make nexus runned by "nexus" user
+#     lineinfile: dest={{nexus_dir}}/bin/nexus.rc regexp="#run_as_user=" line="run_as_user=nexus" backrefs=true
     
 
-  - name: set NEXUS_HOME
-    lineinfile: dest={{nexus_dir}}/bin/nexus regexp="^NEXUS_HOME" line="NEXUS_HOME={{nexus_dir}}" backrefs=true
+#   - name: set NEXUS_HOME
+#     lineinfile: dest={{nexus_dir}}/bin/nexus regexp="^NEXUS_HOME" line="NEXUS_HOME={{nexus_dir}}" backrefs=true
     
 
-  - name: create nexus piddir
-    file: path=/var/run/nexus state=directory group=nexus owner=nexus
+#   - name: create nexus piddir
+#     file: path=/var/run/nexus state=directory group=nexus owner=nexus
     
 
-  - name: set nexus pidir
-    lineinfile: dest={{nexus_dir}}/bin/nexus regexp="^#PIDDIR=" line="PIDDIR=/var/run/nexus" backrefs=true
+#   - name: set nexus pidir
+#     lineinfile: dest={{nexus_dir}}/bin/nexus regexp="^#PIDDIR=" line="PIDDIR=/var/run/nexus" backrefs=true
     
-  - name: Change file ownership, group and permissions
-    file: path={{nexus_dir}} owner=nexus group=nexus mode='1777'
+#   - name: Change file ownership, group and permissions
+#     file: path={{nexus_dir}} owner=nexus group=nexus mode='1777'
    
 
-  - name: create symbolic links to /etc/init.d/nexus
-    file: src={{nexus_dir}}/bin/nexus dest=/etc/init.d/nexus state=link
+#   - name: create symbolic links to /etc/init.d/nexus
+#     file: src={{nexus_dir}}/bin/nexus dest=/etc/init.d/nexus state=link
 
   - name: start nexus
     become: yes
     shell:
       cmd: service nexus start
+     
+  - name: Get rest API endpoint (v >= 3.8.0)
+    set_fact:
+     nexus_rest_api_endpoint: "service/rest/v1/script"
+  
+  - name: Access scripts API endpoint with defined admin password
+    uri:
+     url: "{{ nexus_api_scheme }}://{{ nexus_api_hostname }}:{{ nexus_api_port }}\
+      {{ nexus_api_context_path }}{{ nexus_rest_api_endpoint }}"
+     method: 'HEAD'
+     user: 'admin'
+     password: "{{ nexus_admin_password }}"
+     force_basic_auth: yes
+     status_code: 200, 401
+    register: nexus_api_head_with_defined_password
+    check_mode: no
+
+  - name: Register defined admin password for next operations
+    set_fact:
+      current_nexus_admin_password: "{{ nexus_admin_password }}"
+    when: nexus_api_head_with_defined_password.status == 200
+    no_log: true
+
+  - name: Check if admin.password file exists
+    stat:
+      path: "{{ nexus_data_dir }}/admin.password"
+    register: admin_password_file
+
+#   - name: Get generated admin password from file (nexus >= 3.17)
+#     when:
+#       - admin_password_file.stat.exists
+#       - nexus_api_head_with_defined_password.status == 401
+#       - nexus_version is version_compare('3.17.0', '>=')
+#     block:
+#       - name: Slurp content of remote generated password file
+#         slurp:
+#           src: /usr/local/sonatype-work/nexus3/admin.password
+#         register: _slurpedpass
+
+#       - name: Set default password from slurped content
+#         set_fact:
+#           nexus_default_admin_password: "{{ _slurpedpass.content | b64decode }}"
+
+#   - name: Jenkins Initial Password
+#     shell: cat /usr/local/sonatype-work/nexus3/admin.password
+#     changed_when: false
+#     register: init_password
+
+#   - name: Store password
+#     set_fact:
+#       nexus_default_admin_password: "{{ init_password.stdout }}"
+ 
+#   - name: Print Password
+#     debug:
+#       var: nexus_default_admin_password     
+
+   
+  - name: Access scripts API endpoint with default admin password
+    uri:
+      url: "{{ nexus_api_scheme }}://{{ nexus_api_hostname }}:{{ nexus_api_port }}\
+            {{ nexus_api_context_path }}{{ nexus_rest_api_endpoint }}"
+      method: 'HEAD'
+      user: 'admin'
+      password: "{{ nexus_default_admin_password }}"
+      force_basic_auth: yes
+      status_code: 200, 401
+    register: nexus_api_head_with_default_password
+    when: nexus_api_head_with_defined_password.status == 401
+
+  - name: Register default admin password for next operations
+    set_fact:
+      current_nexus_admin_password: "{{ nexus_default_admin_password }}"
+    when: (nexus_api_head_with_default_password.status | default(false)) == 200
+#   - name: Create directories to hold current groovy scripts for reference
+#     file:
+#       path: "{{ item }}"
+#       state: directory
+#       owner: nexus
+#       group: nexus
+#       with_items:
+#         - "{{ nexus_data_dir }}/groovy-raw-scripts/current"
+#         - "{{ nexus_data_dir }}/groovy-raw-scripts/new"
+  
+  - git:
+      repo: https://github.com/abhishekguptaa/nexus.git
+      dest: "{{ nexus_git_repo }}"
+      update: yes
+  - name: Copy file Update Admin Password
+    copy:
+      src: "{{ nexus_git_repo }}/files/groovy/update_admin_password.groovy"
+      dest: "{{ nexus_data_dir }}/groovy-raw-scripts/new/"
+      owner: nexus
+      group: nexus
+      mode: '1777' 
+      remote_src: yes
+     
+#   - name: Archive scripts
+#     become: no
+#     archive:
+#      path: "{{ nexus_git_repo }}/files/groovy/update_admin_password.groovy"
+#      dest: "{{ nexus_dir }}/mygroovy.tar.gz"
+#      format: gz
+#     run_once: true
+    
+    
+#   - name: Upload new scripts
+#     unarchive:
+#       src: "{{ nexus_dir }}/mygroovy.tar.gz"
+#       dest: "{{ nexus_data_dir }}/groovy-raw-scripts/new/"
+#       remote_src: yes
+
+  - name: Sync new scripts to old and get differences
+    shell: >
+      set -o pipefail &&
+      rsync -ric {{ nexus_data_dir }}/groovy-raw-scripts/new/ {{ nexus_data_dir }}/groovy-raw-scripts/current/
+      | cut -d" " -f 2 | sed "s/\.groovy//g"
+    register: nexus_groovy_files_changed
+    check_mode: no
+    changed_when: false
+    # simple check on changed files kept on host
+    # skip ansible lint (we don't want to use synchronize module for this)
+    args:
+      warn: false
+      executable: /bin/bash
+
+  - name: Declare new or changed groovy scripts in nexus
+    include_tasks: declare_script_each.yml
+    with_items: "{{ nexus_groovy_files_changed.stdout_lines }}"
+
+  - name: Change admin password if we are still using default
+    block:
+      - include_tasks: call_script.yml
+        vars:
+          script_name: "update_admin_password" 
+          args:
+            new_password: "{{ nexus_admin_password }}" 
+
+  - name: Admin password changed
+    set_fact:
+     current_nexus_admin_password: "{{ nexus_admin_password }}"
+    no_log: true
+
